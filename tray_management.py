@@ -1,14 +1,14 @@
 # Libraries
 import time
 # Modules
-from tray_abstract import tray
+from tray_abstract import tray, location
 # Program entry
 
 if __name__ == "__main__":
     #Configure everything on entry
 
     # Create tray object
-    extruder_0_tray = tray(0)
+    extruder_0_tray = tray(location.RIGHT_TRAY)
 
     #Spin
     while(True):

@@ -8,6 +8,10 @@ from dsf.connections import SubscribeConnection, SubscriptionMode
 import json
 from enum import IntEnum
 
+# Enum class describing tray. Right tray is the one handling tool 0.
+class location(IntEnum):
+    RIGHT_TRAY = 0
+    LEFT_TRAY = 1
 # Enum class describing direction of motor movement
 class Direction(IntEnum):
     BACKWARD = -1
