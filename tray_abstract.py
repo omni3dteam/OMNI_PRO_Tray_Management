@@ -16,11 +16,6 @@ class location(IntEnum):
 class Direction(IntEnum):
     BACKWARD = -1
     FORWARD = 1
-# Enum class describing tray sensors
-class Sensors(IntEnum):
-    RIGHT_TRAY_SENSOR = 6
-    LEFT_TRAY_SENSOR = 7
-    EXTRUDER_SENSOR = 8
 # Enum class describing stop condition for motors
 class condition(IntEnum):
     BY_DISTANCE = 0
@@ -35,11 +30,17 @@ class move:
 
 # abstraction for filament tray system
 class tray:
+    sensors_state = [0,0,0]
+    # Enum class describing tray sensors
+    class Sensors(IntEnum):
+        RIGHT_TRAY_SENSOR = 6
+        LEFT_TRAY_SENSOR = 7
+        EXTRUDER_SENSOR = 8
     def __init__(self, _tray_number):
-        # TODO Initialize with real state
-        self.right_sensor = self.get_sensors_state(Sensors.RIGHT_TRAY_SENSOR)
-        self.left_sensor = self.get_sensors_state(Sensors.LEFT_TRAY_SENSOR)
-        self.tool_sensor = self.get_sensors_state(Sensors.EXTRUDER_SENSOR)
+        self.sensors_state = self.get_sensors_state()
+        # self.right_sensor = self.get_sensors_state(Sensors.RIGHT_TRAY_SENSOR)
+        # self.left_sensor = self.get_sensors_state(Sensors.LEFT_TRAY_SENSOR)
+        # self.tool_sensor = self.get_sensors_state(Sensors.EXTRUDER_SENSOR)
         self.tray_number = _tray_number
         if _tray_number == 0:
             self.tray_motor_0 = 2
@@ -52,14 +53,18 @@ class tray:
     def __str__(self):
         return f"Tray Sensors state: Right sensor:{self.right_sensor}, Left sensor:{self.left_sensor}, Tool sensor:{self.tool_sensor}"
     # read filament tray sensor state
-    def get_sensors_state(self, sensor):
+    def get_sensors_state(self):
         # Connect to dsf socket
         command_connection = CommandConnection(debug=False)
         command_connection.connect()
-        message = """M409 K"'sensors.gpIn[{}]"'""".format(sensor)
-        res = command_connection.perform_simple_code(message)
-        object_model = json.loads(res)
-        return object_model["result"]
+        state = [0,0,0]
+        it = 0
+        for sensor in self.Sensors:
+            message = """M409 K"'sensors.gpIn[{}]"'""".format(sensor)
+            res = command_connection.perform_simple_code(message)
+            state[it] = json.loads(res)["result"]
+            it+=1
+        return state
     def wait_for_sensor_state(sensor, state_to_wait ,timeout):
         return True
     # TODO: Function to execute moves asynchronusly
