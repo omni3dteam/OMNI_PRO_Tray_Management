@@ -6,7 +6,6 @@ import logging
 import time
 import threading
 # Modules
-import tray_communication
 from tray_abstract import tray, location
 #from systemd.journal import JournalHandler
 import traceback
@@ -47,17 +46,14 @@ def intercept_data_request():
         traceback.print_exc()
         intercept_connection.close()
 
-
 # Program entry
 data_request = threading.Thread(target=intercept_data_request)
 extruder_0_tray = tray(location.RIGHT_TRAY)
 
 if __name__ == "__main__":
     #Configure everything on entry
-
     data_request.start()
     # Create tray object
-
     #Spin
     while(True):
         # 1. Check for new commands
