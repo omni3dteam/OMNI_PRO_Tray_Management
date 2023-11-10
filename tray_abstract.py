@@ -6,7 +6,16 @@ from dsf.object_model import MessageType, LogLevel
 from dsf.connections import SubscribeConnection, SubscriptionMode
 #Libraries
 import json
+import math
 from enum import IntEnum
+# Connect to dsf socket
+subscribe_connection = SubscribeConnection(SubscriptionMode.PATCH)
+subscribe_connection.connect()
+command_connection = CommandConnection(debug=False)
+command_connection.connect()
+
+def sign(num):
+    return -1 if num < 0 else 1
 
 # Enum class describing tray. Right tray is the one handling tool 0.
 class location(IntEnum):
@@ -22,53 +31,65 @@ class condition(IntEnum):
     WAIT_FOR_SENSOR = 1
 # abstract stepper move
 class move:
+    condition = 0
     def __init__(self, _condition, _right_motor_distance, _left_motor_distance, _feedrate):
         self.condition = _condition
-        self.right_motor_distance = _right_motor_distance
-        self.left_motor_distance = _left_motor_distance
+        self.setpoint = [_right_motor_distance, _left_motor_distance]
         self.feedrate = _feedrate
-
+        self.move_done = False
 # abstraction for filament tray system
 class tray:
-    sensors_state = [0,0,0]
-    # Enum class describing tray sensors
-    class Sensors(IntEnum):
-        RIGHT_TRAY_SENSOR = 6
-        LEFT_TRAY_SENSOR = 7
-        EXTRUDER_SENSOR = 8
-    def __init__(self, _tray_number):
-        self.sensors_state = self.get_sensors_state()
-        # self.right_sensor = self.get_sensors_state(Sensors.RIGHT_TRAY_SENSOR)
-        # self.left_sensor = self.get_sensors_state(Sensors.LEFT_TRAY_SENSOR)
-        # self.tool_sensor = self.get_sensors_state(Sensors.EXTRUDER_SENSOR)
-        self.tray_number = _tray_number
-        if _tray_number == 0:
-            self.tray_motor_0 = 2
-            self.tray_motor_1 = 3
-        elif _tray_number == 1:
-            self.tray_motor_0 = 4
-            self.tray_motor_1 = 5
-        else:
-            print("Wrong tray number")
+    def __init__(self, _right_motor_drive, _left_motor_drive, _extruder, _right_motor_sensor_number, _left_motor_sensor_number, extruder_sensor_number):
+            self.tray_motors = [_right_motor_drive, _left_motor_drive, _extruder]
+            self.sensor_gpios = [_right_motor_sensor_number,_left_motor_sensor_number,extruder_sensor_number]
+            self.sensors_state = self.get_sensors_state(self.sensor_gpios)
+            self.current_position = [0,0,0]
     def __str__(self):
-        return f"Tray Sensors state: Right sensor:{self.right_sensor}, Left sensor:{self.left_sensor}, Tool sensor:{self.tool_sensor}"
+        return f"Tray Sensors state: Right sensor:{self.sensors_state[0]}, Left sensor:{self.sensors_state[1]}, Tool sensor:{self.sensors_state[2]}"
     # read filament tray sensor state
-    def get_sensors_state(self):
-        # Connect to dsf socket
-        command_connection = CommandConnection(debug=False)
-        command_connection.connect()
+    def get_sensors_state(self, gpios):
         state = [0,0,0]
-        it = 0
-        for sensor in self.Sensors:
-            message = """M409 K"'sensors.gpIn[{}]"'""".format(sensor)
-            res = command_connection.perform_simple_code(message)
-            state[it] = json.loads(res)["result"]
-            it+=1
-        return state
+        res = command_connection.perform_simple_code("""M409 K"'sensors.gpIn"'""")
+        parsed_json = json.loads(res)["result"]
+        self.sensors_state = [parsed_json[gpios[0]]["value"],parsed_json[gpios[1]]["value"],parsed_json[gpios[2]]["value"]]
+        print(self.sensors_state)
     def wait_for_sensor_state(sensor, state_to_wait ,timeout):
         return True
+    def return_sensors_state(self):
+        return self.sensors_state
+    def create_dummy_axis(self, drives):
+        res = command_connection.perform_simple_code("M584 U{} V{}".format(drives[0], drives[1]))
+        # Allow movement of un-homed axis
+        res = command_connection.perform_simple_code("M564 H0")
+        # relative extrusion mode
+        res = command_connection.perform_simple_code("G91")
+    def delete_dummy_axis(tray_motor):
+         res = command_connection.perform_simple_code("M584 X30.0 Y40.0:41.0 Z50.0:51.0:52.0 E20.0:21.0:10.0:10.1:11.0:11.1")
     # TODO: Function to execute moves asynchronusly
-    def execut_moves(self):
+    def execut_moves(self, new_move):
+        left_motor_distance = 0
+        right_motor_distance = 0
+        if new_move.condition == condition.BY_DISTANCE:
+            if(self.current_position[0] != new_move.setpoint[0]):
+                right_motor_distance = sign(new_move.setpoint[0])*10
+                self.current_position[0] += right_motor_distance
+            else:
+                right_motor_distance = 0
+            if(self.current_position[1] != new_move.setpoint[1]):
+                left_motor_distance = sign(new_move.setpoint[1])*10
+                self.current_position[1] += left_motor_distance
+            else:
+                left_motor_distance = 0
+        elif new_move.condition == condition.WAIT_FOR_SENSOR:
+            pass
+        if(left_motor_distance + right_motor_distance == 0):
+            self.current_position[0] = 0
+            self.current_position[1] = 0
+            return True
+        else:
+            message = "G1 U{} V{} F{}".format(0, 1000, new_move.feedrate)
+            res = command_connection.perform_simple_code(message, CodeChannel.SBC, False)
+        return False
         # command_connection = CommandConnection(debug=False)
         # command_connection.connect()
         # # Allow cold extrusion
@@ -93,3 +114,6 @@ class tray:
         # # Set extruder absolute mode
         # command_connection.perform_simple_code("M82")
         pass
+    def sine_move():
+
+        print(math.sin(math.radians()))
