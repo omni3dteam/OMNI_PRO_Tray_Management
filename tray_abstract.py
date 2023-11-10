@@ -58,15 +58,16 @@ class move:
         self.desired_sensors_state = [state0, state1, state2]
 # abstraction for filament tray system
 class tray:
-    def __init__(self, _right_motor_drive, _left_motor_drive, _extruder, _right_motor_sensor_number, _left_motor_sensor_number, extruder_sensor_number):
+    def __init__(self, _right_motor_drive, _left_motor_drive, _right_motor_axis, _left_motor_axis, _extruder, _right_motor_sensor_number, _left_motor_sensor_number, extruder_sensor_number):
             self.tray_motors = [_right_motor_drive, _left_motor_drive, _extruder]
+            self.axis = [_right_motor_axis, _left_motor_axis]
             self.sensor_gpios = [_right_motor_sensor_number,_left_motor_sensor_number,extruder_sensor_number]
-            self.sensors_state = self.get_sensors_state(self.sensor_gpios)
+            self.sensors_state = self.get_sensors_state()
             self.current_position = [0,0,0]
     def __str__(self):
         return f"Tray Sensors state: Right sensor:{self.sensors_state[0]}, Left sensor:{self.sensors_state[1]}, Tool sensor:{self.sensors_state[2]}"
     # read filament tray sensor state
-    def get_sensors_state(self, gpios):
+    def get_sensors_state(self):
         state = [0,0,0]
         try:
             res = command_connection.perform_simple_code("""M409 K"'sensors.gpIn"'""")
@@ -74,7 +75,7 @@ class tray:
             print(e)
             return 0
         parsed_json = json.loads(res)["result"]
-        self.sensors_state = [parsed_json[gpios[0]]["value"],parsed_json[gpios[1]]["value"],parsed_json[gpios[2]]["value"]]
+        self.sensors_state = [parsed_json[self.sensor_gpios[0]]["value"],parsed_json[self.sensor_gpios[1]]["value"],parsed_json[self.sensor_gpios[2]]["value"]]
         print(self.sensors_state)
     def wait_for_sensor_state(sensor, state_to_wait ,timeout):
         return True
@@ -98,7 +99,7 @@ class tray:
             right_motor_distance = new_move.setpoint[0]
             left_motor_distance = new_move.setpoint[1]
             # Execute G1 and leave
-            message = "G1 U{} V{} F{}".format(right_motor_distance, left_motor_distance, new_move.feedrate)
+            message = "G1 {}{} {}{} F{}".format(self.axis[0], right_motor_distance, self.axis[1], left_motor_distance, new_move.feedrate)
             transcieve(message)
             return True
         ## condition mode - move until 'condition' in incremental movement
@@ -113,7 +114,7 @@ class tray:
             # if self.sensors_state[2] != new_move.desired_sensors_state[2]:
             #     right_motor_distance = resolve_direction(self.sensors_state[2], new_move.desired_sensors_state[2])*amount_to_move
             # execute G1 command
-            message = "G1 U{} V{} F{}".format(right_motor_distance, left_motor_distance, new_move.feedrate)
+            message = "G1 {}{} {}{} F{}".format(self.axis[0], right_motor_distance, self.axis[1], left_motor_distance, new_move.feedrate)
             transcieve(message)
         # go back to default movement queue
         transcieve("M596 P0")

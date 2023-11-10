@@ -18,22 +18,31 @@ from dsf.commands.code import CodeType
 from dsf.object_model import MessageType, LogLevel
 from dsf.connections import SubscribeConnection, SubscriptionMode
 
-extruder_0_tray = tray_abstract.tray(10.0, 10.1, 20.0, 6, 7, 8)
+extruder_0_tray = tray_abstract.tray(10.0, 10.1, "U","V" ,20.0, 6, 7, 8)
+extruder_1_tray = tray_abstract.tray(11.0, 11.1, "W","A" ,21.0, 6, 7, 8)
 
 move_queue = queue.Queue()
 def intercept_move_request():
-    filters = ["M1101"]
+    filters = ["M1101", "M1103"]
     intercept_connection = InterceptConnection(InterceptionMode.PRE, filters=filters, debug=True)
     intercept_connection.connect()
+    global current_tray
     try:
         while True:
             # Wait for a code to arrive.
             cde = intercept_connection.receive_code()
-            # create tray object for desired tray
+            # Tray 0 command handling:
             if cde.type == CodeType.MCode and cde.majorNumber == 1101:
                 intercept_connection.resolve_code(MessageType.Success)
                 new_move = tray_abstract.move(cde.parameter("P").as_int(), cde.parameter("R").as_int(), cde.parameter("L").as_int(), cde.parameter("F").as_int(), 0, 0, 0)
                 move_queue.put(new_move)
+                current_tray = extruder_0_tray
+            # Tray 1 command handling:
+            elif cde.type == CodeType.MCode and cde.majorNumber == 1103:
+                intercept_connection.resolve_code(MessageType.Success)
+                new_move = tray_abstract.move(cde.parameter("P").as_int(), cde.parameter("R").as_int(), cde.parameter("L").as_int(), cde.parameter("F").as_int(), 0, 0, 0)
+                move_queue.put(new_move)
+                current_tray = extruder_1_tray
             else:
                 intercept_connection.ignore_code()
     except Exception as e:
@@ -81,6 +90,8 @@ class state(IntEnum):
     MOVING = 2
     MOVE_ENDING = 3
 
+    global current_tray
+
 if __name__ == "__main__":
     #Configure everything on entry
     data_request.start()
@@ -93,7 +104,8 @@ if __name__ == "__main__":
     #Spin
     while(True):
         if(state_machine == state.IDLE):
-            extruder_0_tray.get_sensors_state(extruder_0_tray.sensor_gpios)
+            extruder_0_tray.get_sensors_state()
+            extruder_1_tray.get_sensors_state()
             if(move_queue.empty() == False):
                 state_machine = state.MOVE_INIT
             else:
@@ -101,16 +113,16 @@ if __name__ == "__main__":
                 time.sleep(1)
                 pass
         elif(state_machine == state.MOVE_INIT):
-            extruder_0_tray.prepare_movement()
+            current_tray.prepare_movement()
             state_machine = state.MOVING
             current_move = move_queue.get()
         elif(state_machine == state.MOVING):
             if current_move.move_done != True:
-                current_move.move_done = extruder_0_tray.execut_moves(current_move)
+                current_move.move_done = current_tray.execut_moves(current_move)
             else:
                 state_machine = state.MOVE_ENDING
                 current_move = 0
-            extruder_0_tray.get_sensors_state(extruder_0_tray.sensor_gpios)
+            current_tray.get_sensors_state()
         elif(state_machine == state.MOVE_ENDING):
             print("Move ended")
             state_machine = state.IDLE
