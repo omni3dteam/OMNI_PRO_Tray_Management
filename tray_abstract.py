@@ -70,13 +70,13 @@ class tray:
         left_motor_distance = 0
         right_motor_distance = 0
         if new_move.condition == condition.BY_DISTANCE:
-            if(self.current_position[0] != new_move.setpoint[0]):
-                right_motor_distance = sign(new_move.setpoint[0])*10
+            if(self.current_position[0] <= new_move.setpoint[0]):
+                right_motor_distance = sign(new_move.setpoint[0])*20
                 self.current_position[0] += right_motor_distance
             else:
                 right_motor_distance = 0
-            if(self.current_position[1] != new_move.setpoint[1]):
-                left_motor_distance = sign(new_move.setpoint[1])*10
+            if(self.current_position[1] <= new_move.setpoint[1]):
+                left_motor_distance = sign(new_move.setpoint[1])*20
                 self.current_position[1] += left_motor_distance
             else:
                 left_motor_distance = 0
@@ -87,7 +87,7 @@ class tray:
             self.current_position[1] = 0
             return True
         else:
-            message = "G1 U{} V{} F{}".format(0, 1000, new_move.feedrate)
+            message = "G1 U{} V{} F{}".format(right_motor_distance, left_motor_distance, new_move.feedrate)
             res = command_connection.perform_simple_code(message, CodeChannel.SBC, False)
         return False
         # command_connection = CommandConnection(debug=False)

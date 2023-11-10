@@ -18,7 +18,7 @@ from dsf.commands.code import CodeType
 from dsf.object_model import MessageType, LogLevel
 from dsf.connections import SubscribeConnection, SubscriptionMode
 
-extruder_0_tray = tray_abstract.tray(10.0, 10.1, 20.0, 6, 7, 8)
+extruder_0_tray = tray_abstract.tray(10.0, 11.0, 20.0, 6, 7, 8)
 move_queue = queue.Queue()
 def intercept_move_request():
     filters = ["M1101"]
@@ -101,6 +101,7 @@ if __name__ == "__main__":
         elif(state_machine == state.MOVE_INIT):
             res = tray_abstract.command_connection.perform_simple_code("M595 Q1 P100")
             res = tray_abstract.command_connection.perform_simple_code("M596 P1")
+            res = tray_abstract.command_connection.perform_simple_code("G91")
             extruder_0_tray.create_dummy_axis(extruder_0_tray.tray_motors)
             state_machine = state.MOVING
             current_move = move_queue.get()
