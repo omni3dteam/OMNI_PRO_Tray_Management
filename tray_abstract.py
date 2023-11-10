@@ -14,9 +14,27 @@ subscribe_connection.connect()
 command_connection = CommandConnection(debug=False)
 command_connection.connect()
 
+# Helper functions
 def sign(num):
     return -1 if num < 0 else 1
-
+def resolve_direction(current_state, new_state):
+    if current_state < new_state: # current state = 0, and new_state = 1 - so we want to retract
+        return -1
+    else:
+        return 1
+# Communication wrapper
+def transcieve(message):
+    try:
+        res = command_connection.perform_simple_code(message)
+    except Exception as e:
+        print(e)
+        return False
+    finally:
+        if res == '':
+            return True
+        else:
+            print(res)
+            return False
 # Enum class describing tray. Right tray is the one handling tool 0.
 class location(IntEnum):
     RIGHT_TRAY = 0
@@ -32,11 +50,12 @@ class condition(IntEnum):
 # abstract stepper move
 class move:
     condition = 0
-    def __init__(self, _condition, _right_motor_distance, _left_motor_distance, _feedrate):
+    def __init__(self, _condition, _right_motor_distance, _left_motor_distance, _feedrate, state0, state1, state2):
         self.condition = _condition
         self.setpoint = [_right_motor_distance, _left_motor_distance]
         self.feedrate = _feedrate
         self.move_done = False
+        self.desired_sensors_state = [state0, state1, state2]
 # abstraction for filament tray system
 class tray:
     def __init__(self, _right_motor_drive, _left_motor_drive, _extruder, _right_motor_sensor_number, _left_motor_sensor_number, extruder_sensor_number):
@@ -49,7 +68,11 @@ class tray:
     # read filament tray sensor state
     def get_sensors_state(self, gpios):
         state = [0,0,0]
-        res = command_connection.perform_simple_code("""M409 K"'sensors.gpIn"'""")
+        try:
+            res = command_connection.perform_simple_code("""M409 K"'sensors.gpIn"'""")
+        except Exception as e:
+            print(e)
+            return 0
         parsed_json = json.loads(res)["result"]
         self.sensors_state = [parsed_json[gpios[0]]["value"],parsed_json[gpios[1]]["value"],parsed_json[gpios[2]]["value"]]
         print(self.sensors_state)
@@ -57,50 +80,42 @@ class tray:
         return True
     def return_sensors_state(self):
         return self.sensors_state
-    def create_dummy_axis(self, drives):
-        res = command_connection.perform_simple_code("M584 U{} V{}".format(drives[0], drives[1]))
+    def prepare_movement(self):
         # Allow movement of un-homed axis
-        res = command_connection.perform_simple_code("M564 H0")
+        transcieve("M564 H0")
         # relative extrusion mode
-        res = command_connection.perform_simple_code("G91")
-    def delete_dummy_axis(tray_motor):
-         res = command_connection.perform_simple_code("M584 X30.0 Y40.0:41.0 Z50.0:51.0:52.0 E20.0:21.0:10.0:10.1:11.0:11.1")
-    # TODO: Function to execute moves asynchronusly
+        transcieve("G91")
+        # select second movement queue
+        transcieve("M596 P1")
     def execut_moves(self, new_move):
+        # declare local variable
         left_motor_distance = 0
         right_motor_distance = 0
+        # Check in which mode we want to move
+        ## distance mode - move by 'setpoint' amount of milimeters
         if new_move.condition == condition.BY_DISTANCE:
+            # Set setpoint in G1 command
             right_motor_distance = new_move.setpoint[0]
-            left_motor_distance = new_move.setpoint[0]
+            left_motor_distance = new_move.setpoint[1]
+            # Execute G1 and leave
+            message = "G1 U{} V{} F{}".format(right_motor_distance, left_motor_distance, new_move.feedrate)
+            transcieve(message)
+            return True
+        ## condition mode - move until 'condition' in incremental movement
         elif new_move.condition == condition.WAIT_FOR_SENSOR:
-            pass
-        message = "G1 U{} V{} F{}".format(right_motor_distance, left_motor_distance, new_move.feedrate)
-        res = command_connection.perform_simple_code(message)
-        return True
-        # command_connection = CommandConnection(debug=False)
-        # command_connection.connect()
-        # # Allow cold extrusion
-        # command_connection.perform_simple_code("M302 P1")
-        # # Set extruder relative mode
-        # command_connection.perform_simple_code("M83")
-        # # Select proper motor, or both if specified
-        # if both == True:
-        #     command_connection.perform_simple_code("M563 P0 D{}:{}:{} H{} F{}".format(self.tray_number, self.tray_motor_0, self.tray_motor_1, self.tray_number, self.tray_number))
-        # else:
-        #     command_connection.perform_simple_code("M563 P0 D{}:{} H{} F{}".format(self.tray_number, motor, self.tray_number, self.tray_number))
-        # # Select tool, which corresponds to tray
-        # command_connection.perform_simple_code("T{}".format(self.tray_number))
-        # # Send move command
-        # commanded_move = dir*distance
-        # if both == True:
-        #     command_connection.perform_simple_code("G0 E0:{}:{} F{}".format(commanded_move, commanded_move, feedrate))
-        # else:
-        #     command_connection.perform_simple_code("G0 E0:{} F{}".format(commanded_move, feedrate))
-        # # Disallow cold extrusion
-        # command_connection.perform_simple_code("M302 P0")
-        # # Set extruder absolute mode
-        # command_connection.perform_simple_code("M82")
-        pass
-    def sine_move():
-
-        print(math.sin(math.radians()))
+            # declare chunk to move
+            amount_to_move = 100
+            # prepare movement command
+            if self.sensors_state[0] != new_move.desired_sensors_state[0]:
+                right_motor_distance = resolve_direction(self.sensors_state[0], new_move.desired_sensors_state[0])*amount_to_move
+            if self.sensors_state[1] != new_move.desired_sensors_state[1]:
+                left_motor_distance = resolve_direction(self.sensors_state[1], new_move.desired_sensors_state[1])*amount_to_move
+            # if self.sensors_state[2] != new_move.desired_sensors_state[2]:
+            #     right_motor_distance = resolve_direction(self.sensors_state[2], new_move.desired_sensors_state[2])*amount_to_move
+            # execute G1 command
+            message = "G1 U{} V{} F{}".format(right_motor_distance, left_motor_distance, new_move.feedrate)
+            transcieve(message)
+        # go back to default movement queue
+        transcieve("M596 P0")
+        # disallow movement of unhomed axis
+        transcieve("M564 H1")
