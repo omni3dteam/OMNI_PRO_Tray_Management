@@ -14,6 +14,8 @@ subscribe_connection.connect()
 command_connection = CommandConnection(debug=False)
 command_connection.connect()
 
+### This file contains abstraction for tray movement and sensors state. ###
+
 # Helper functions
 def sign(num):
     return -1 if num < 0 else 1
@@ -35,10 +37,6 @@ def transcieve(message):
         else:
             print(res)
             return False
-# Enum class describing tray. Right tray is the one handling tool 0.
-class location(IntEnum):
-    RIGHT_TRAY = 0
-    LEFT_TRAY = 1
 # Enum class describing direction of motor movement
 class Direction(IntEnum):
     BACKWARD = -1
@@ -88,6 +86,11 @@ class tray:
         transcieve("G91")
         # select second movement queue
         transcieve("M596 P1")
+    def calculate_wait_time(feedrate, distance):
+        # feedrate in mm/min
+        # return time in seconds
+        return ((60*distance)/feedrate)
+
     def execut_moves(self, new_move):
         # declare local variable
         left_motor_distance = 0
