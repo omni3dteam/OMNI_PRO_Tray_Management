@@ -1,0 +1,17 @@
+[Unit]
+Description = Tray management middleware
+After = network.target
+ 
+[Service]
+Type = simple
+WorkingDirectory=/home/pi/OMNI_PRO_Tray_Management
+ExecStart = /usr/bin/python3 /home/pi/OMNI_PRO_Tray_Management/tray_management.py
+User = pi
+Group = pi
+Restart = on-failure 
+SyslogIdentifier = tray_system_logs
+RestartSec = 5
+TimeoutStartSec = infinity
+ 
+[Install]
+WantedBy = multi-user.target

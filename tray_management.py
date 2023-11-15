@@ -18,7 +18,7 @@ from dsf.commands.code import CodeType
 from dsf.object_model import MessageType, LogLevel
 from dsf.connections import SubscribeConnection, SubscriptionMode
 
-extruder_0_tray = tray_abstract.tray(10.0, 10.1, "U","V" ,20.0, 6, 7, 8)
+extruder_0_tray = tray_abstract.tray(0, 1, "U","V" ,20.0, 6, 7, 8)
 extruder_1_tray = tray_abstract.tray(11.0, 11.1, "W","A" ,21.0, 6, 7, 8)
 
 move_queue = queue.Queue()
