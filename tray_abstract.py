@@ -11,9 +11,8 @@ from tray_communication import transcieve
 # abstract steppers move. Move describes new commands for single tool.
 class move:
     condition = 0
-    def __init__(self, _axis,_condition, _setpoint  ,_feedrate,_sensor_to_trigger ,_desired_sensor_state):
+    def __init__(self, _axis, _setpoint  ,_feedrate,_sensor_to_trigger ,_desired_sensor_state):
         self.axis = _axis
-        self.condition = _condition
         self.setpoint = _setpoint
         self.feedrate = _feedrate
         self.sensor_to_trigger = _sensor_to_trigger
@@ -25,8 +24,7 @@ class tool:
         UNDEFINED = 0
         FILAMENT_NOT_PRESENT = 1
         FILAMENT_PRESENT = 2
-        FILAMENT_LOADED = 3
-        FILAMENT_PRIMED = 4
+        FILAMENT_PRIMED = 3
     class sensor_position(IntEnum):
         LOWER = 0
         UPPER = 1
@@ -34,10 +32,14 @@ class tool:
     class sensor_state(IntEnum):
         FILAMENT_PRESENT = 1
         FILAMENT_NOT_PRESENT = 0
-    def __init__(self, _tool_number ,_motor_drive, _motor_axis, _lower_sensor, _upper_sensor, _extruder_sensor):
+    class direction(IntEnum):
+        FORWARD = 1
+        BACKWARD = -1
+    def __init__(self, _tool_number ,_motor_drive, _motor_axis, _extruder,_lower_sensor, _upper_sensor, _extruder_sensor):
         self.tool_number = _tool_number
         self.motor_drive = _motor_drive
         self.motor_axis =  _motor_axis
+        self.extruder = _extruder
         self.lower_sensor = _lower_sensor
         self.upper_sensor = _upper_sensor
         self.extruder_sensor = _extruder_sensor
@@ -55,45 +57,47 @@ class tool:
                               parsed_json[self.upper_sensor]   ["value"],
                               parsed_json[self.extruder_sensor]["value"]]
         return sensors_state
-class tray:
-    def __init__(self, _tray,_tool_0, _tool_1, _extruder_drive):
-        self.tray = _tray
-        self.tools = [_tool_0, _tool_1]
-        self.extruder_drive = _extruder_drive
-    def __str__(self):
-        return f"Tray Sensors state: Right sensor:{self.sensors_state[0]}, Left sensor:{self.sensors_state[1]}, Tool sensor:{self.sensors_state[2]}"
-class system:
-    # Enum class describing direction of motor movement
-    class Direction(IntEnum):
-        BACKWARD = -1
-        FORWARD = 1
-    # Enum class describing stop condition for motors
-    class condition(IntEnum):
-        BY_DISTANCE = 0
-        WAIT_FOR_SENSOR = 1
-    move_queue = queue.Queue()
-    def __init__(self, _tray_0, _tray_1):
-        self.trays = [_tray_0, _tray_1]
-    def __str__(self):
-        pass
-    # Helper functions
-    def sign(num):
-        return -1 if num < 0 else 1
-    def resolve_direction(self, current_state, new_state):
-        if current_state < new_state: # current state = 0, and new_state = 1 - so we want to retract
-            return 1
-        elif current_state == new_state:
-            return 0
-        else:
-            return -1
+# class tray:
+#     def __init__(self, _tray,_tool_0, _tool_1, _extruder_drive):
+#         self.tray = _tray
+#         self.tools = [_tool_0, _tool_1]
+#         self.extruder_drive = _extruder_drive
+#     def __str__(self):
+#         return f"Tray Sensors state: Right sensor:{self.sensors_state[0]}, Left sensor:{self.sensors_state[1]}, Tool sensor:{self.sensors_state[2]}"
+# class system:
+#     # Enum class describing direction of motor movement
+#     class Direction(IntEnum):
+#         BACKWARD = -1
+#         FORWARD = 1
+#     # Enum class describing stop condition for motors
+#     class condition(IntEnum):
+#         BY_DISTANCE = 0
+#         WAIT_FOR_SENSOR = 1
+#     move_queue = queue.Queue()
+#     def __init__(self, _tray_0, _tray_1):
+#         self.trays = [_tray_0, _tray_1]
+#     def __str__(self):
+#         pass
+#     # Helper functions
+#     def sign(num):
+#         return -1 if num < 0 else 1
+#     def resolve_direction(self, current_state, new_state):
+#         if current_state < new_state: # current state = 0, and new_state = 1 - so we want to retract
+#             return 1
+#         elif current_state == new_state:
+#             return 0
+#         else:
+#             return -1
     def prepare_movement(self):
         # Allow movement of un-homed axis
-        transcieve("M564 H0")
-        # relative extrusion mode
+        transcieve("M564 H0 S0")
+        # relative movement
         transcieve("G91")
         # select second movement queue
         transcieve("M596 P1")
-    def calculate_wait_time(feedrate, distance):
+        # relative extrusion
+        transcieve("M83")
+    def calculate_wait_time(self,distance, feedrate):
         # feedrate in mm/min
         # return time in seconds
         return ((60*distance)/feedrate)
@@ -111,10 +115,10 @@ class system:
         # self.prepare_movement()
         message = "G1 {}{} F{}".format(trays_moves.axis, trays_moves.setpoint, trays_moves.feedrate)
         transcieve(message)
-    def check_for_conditioned_move(self, tool, sensor, state):
-        current_sensor_state = tool.get_sensors_state()
-        move_chunk = self.resolve_direction(current_sensor_state[sensor], state)* 2.5 # <-- magic number!
-        return move_chunk
+    # def check_for_conditioned_move(self, tool, sensor, state):
+    #     current_sensor_state = tool.get_sensors_state()
+    #     move_chunk = self.resolve_direction(current_sensor_state[sensor], state)* 2.5 # <-- magic number!
+    #     return move_chunk
         # # declare local variable
         # left_motor_distance = 0
         # right_motor_distance = 0
