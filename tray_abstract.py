@@ -11,14 +11,11 @@ from tray_communication import transcieve
 # abstract steppers move. Move describes new commands for single tool.
 class move:
     condition = 0
-    def __init__(self, _axis, _setpoint  ,_feedrate,_sensor_to_trigger ,_desired_sensor_state):
+    def __init__(self, _axis, _setpoint  ,_feedrate):
         self.axis = _axis
         self.setpoint = _setpoint
         self.feedrate = _feedrate
-        self.sensor_to_trigger = _sensor_to_trigger
-        self.desired_sensors_state = _desired_sensor_state
-        self.move_done = False
-# abstraction for filament tray system
+# abstraction for tool
 class tool:
     class state(IntEnum):
         UNDEFINED = 0
@@ -46,7 +43,8 @@ class tool:
         self.extruder_sensor = _extruder_sensor
         self.current_state = self.state.UNDEFINED
     def __str__(self) -> str:
-        return f"tray"
+        return f"None"
+
     def get_sensors_state(self):
         try:
             res = transcieve("""M409 K"'sensors.gpIn"'""")
@@ -68,21 +66,12 @@ class tool:
         transcieve("M596 P1")
         # relative extrusion
         transcieve("M83")
+
     def calculate_wait_time(self,distance, feedrate):
         # feedrate in mm/min
         # return time in seconds
         return ((60*distance)/feedrate)
+
     def execut_moves(self, trays_moves):
         message = "G1 {}{} F{}".format(trays_moves.axis, trays_moves.setpoint, trays_moves.feedrate)
         transcieve(message)
-
-# class tray:
-#     def __init__(self, _tray,_tool_0, _tool_1):
-#         self.tray = _tray
-#         self.tools = [_tool_0, _tool_1]
-#     def __str__(self):
-#         return f"Tray Sensors state: Right sensor:{self.sensors_state[0]}, Left sensor:{self.sensors_state[1]}, Tool sensor:{self.sensors_state[2]}"
-#     def check_for_colision(_caller_tool):
-#         if
-
-from tray_management import tool_states
