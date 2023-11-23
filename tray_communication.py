@@ -4,6 +4,7 @@ from dsf.connections import InterceptConnection, InterceptionMode
 from dsf.commands.code import CodeType, CodeChannel
 from dsf.object_model import MessageType, LogLevel
 from dsf.connections import SubscribeConnection, SubscriptionMode
+from threading import Event
 
 subscribe_connection = SubscribeConnection(SubscriptionMode.PATCH)
 subscribe_connection.connect()

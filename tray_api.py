@@ -7,14 +7,13 @@ import json
 ### This file contains high level API for developing control functions for tray system. ###
 class movement_api:
     def __init__(self):
-
         pass
     def __str__(self):
         pass
 # # Perform check for hotend temperature.
     def check_if_is_hot(self, _tool):
-        message = """M409 K"'heat.heaters[{}].current"'""".format(_tool.tool_number%2)
-        res = tray_abstract.transcieve("""M409 K"'heat.heaters[{}].current"'""".format(_tool.tool_number%2))
+        message = """M409 K"'heat.heaters[{}].current"'""".format(_tool.extruder)
+        res = tray_abstract.transcieve(message)
         current_temperature = json.loads(res)["result"]
         if current_temperature <= 200: # <-- magic number, fix by getting info from RFID
             print("Cant prime extruder if its not hot")
@@ -25,23 +24,17 @@ class movement_api:
         #local variables.
         is_present = tool.sensor_state.FILAMENT_NOT_PRESENT
         sensors_state = _tool.get_sensors_state()
-        # TODO: Do it only if extruder is hot.
         # retract some filament and check for state.
-        if self.check_if_is_hot(_tool) != True:
-            return 0
-        num_of_trials = 0
-        while num_of_trials < 5:
-            _tool.execut_moves(move("e", num_of_trials+5, 500))
-            time.sleep(_tool.calculate_wait_time( num_of_trials+5, 500)/2)
-            sensors_state = _tool.get_sensors_state()
-            is_present = sensors_state[tool.sensor_position.EXTRUDER]
-            if is_present == tool.sensor_state.FILAMENT_PRESENT:
-                break
-            else:
-                num_of_trials += 1
+        _tool.execut_moves(move("e", 3, 500))
+        time.sleep(_tool.calculate_wait_time( 3, 500)/2)
+        sensors_state = _tool.get_sensors_state()
+        _tool.execut_moves(move("e", -3, 500))
+        time.sleep(_tool.calculate_wait_time( 3, 500)/2)
+        sensors_state = _tool.get_sensors_state()
+        is_present = (sensors_state[tool.sensor_position.EXTRUDER])
         return is_present
 # # Load filament.
-    def load_filament(self, _tool):
+    def load_filament(self, _tool, _tools_prime_state):
         sensors_state = _tool.get_sensors_state()
         while(sensors_state[tool.sensor_position.LOWER] != tool.sensor_state.FILAMENT_PRESENT):
             # Wait for user to put filament into tube
@@ -54,9 +47,14 @@ class movement_api:
             sensors_state = _tool.get_sensors_state()
         # Perform small move to check extruder sensor
         print("Filament loaded into a feeder")
-        tool_move = move(_tool.motor_axis, -8, 3000)
-        sensors_state = _tool.get_sensors_state()
-        _tool.execut_moves(tool_move)
+        if _tools_prime_state[_tool.neighbour_tool_number].is_set():
+            # if other filament is primed, do non-conditional feed
+            tool_move = move(_tool.motor_axis, 10, 3000)
+            for i in range (0, 80):
+                 _tool.execut_moves(tool_move)
+                 time.sleep(_tool.calculate_wait_time(10, 3000))
+            print("Filament present at extruder")
+            return 1
         # Check sensor status
         ref_time = time.time()
         while sensors_state[tool.sensor_position.EXTRUDER] != tool.sensor_state.FILAMENT_PRESENT:
@@ -87,7 +85,11 @@ class movement_api:
         print("Filament Unloaded")
 
 # # Push filament all the way into hotend.
-    def prime_extruder(self, _tool):
+    def prime_extruder(self, _tool, tools_prime_state):
+        # Check if other filament is in the way
+        if tools_prime_state[_tool.neighbour_tool_number].is_set():
+            print("Cant prime because other filament is primed")
+            return 0
         # Select tool
         tray_abstract.transcieve("T{}".format(_tool.tool_number))
         # Check if filament is present at extruder
@@ -113,24 +115,20 @@ class movement_api:
         print("extruder primed")
         return 1
 # # retract filament from hotend.
-    def retract(self, _tool):
+    def retract(self, _tool, tools_prime_state):
         # Select tool
         tray_abstract.transcieve("T{}".format(_tool.tool_number))
         # Check if its hot
-        message = """M409 K"'heat.heaters[{}].current"'""".format(_tool.tool_number%2)
-        res = tray_abstract.transcieve("""M409 K"'heat.heaters[{}].current"'""".format(_tool.tool_number%2))
-        current_temperature = json.loads(res)["result"]
-        if current_temperature <= 200: # <-- magic number, fix by getting info from RFID
-            print("Cant prime extruder if its not hot")
+        if self.check_if_is_hot(_tool) != True:
             return 0
         # Create move command to retract filament from extruder
-        tool_move = move("e", -70, 300)
+        tool_move = move("e", -90, 300)
         _tool.execut_moves(tool_move)
         time.sleep(_tool.calculate_wait_time(90, 300))
         # Create move command to retract filament to tee at higher speed
-        tool_move = move(_tool.motor_axis, -55, 3000)
+        tool_move = move(_tool.motor_axis, -55, 1500)
         _tool.execut_moves(tool_move)
-        time.sleep(_tool.calculate_wait_time(55, 3000))
+        time.sleep(_tool.calculate_wait_time(55, 1500))
         print("Filament retracted")
         return 1
 
