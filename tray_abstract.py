@@ -2,7 +2,6 @@
 #Libraries
 import json
 from enum import IntEnum
-from threading import Event
 # Connect to dsf socket
 from tray_communication import transcieve
 ### This file contains abstraction for tray movement and sensors state. ###

@@ -1,25 +1,24 @@
 #Libraries
 from enum import IntEnum
 import time
-import logging
-import time
 from threading import Thread, Event
 import queue
 # Modules
 from tray_abstract import tool
+from tray_communication import send_message
 import tray_api
+from tray_api import log
 #from systemd.journal import JournalHandler
 import traceback
 # Python dsf API
-from dsf.connections import CommandConnection
 from dsf.connections import InterceptConnection, InterceptionMode
 from dsf.commands.code import CodeType
-from dsf.object_model import MessageType, LogLevel
+from dsf.object_model import MessageType
 # Define tools
-tool_0 = tool(0, 1, 10.0, "U", 0, 13, 15, 11)
-tool_1 = tool(2, 0, 10.1, "V", 0, 12, 14, 11)
-tool_2 = tool(1, 3, 11.0, "W", 1, 8, 10, 16)
-tool_3 = tool(3, 3, 11.1, "A", 1, 7, 9, 16)
+tool_0 = tool(0, 1, 10.0, "U", 0, 13, 15, 16)
+tool_1 = tool(2, 0, 10.1, "V", 0, 17, 19, 21)
+tool_2 = tool(1, 3, 11.0, "W", 1, 18, 20, 16)
+tool_3 = tool(3, 3, 11.1, "A", 1, 12, 14, 21)
 tools_prime_state = [Event(), Event(), Event(), Event()]
 # Define command queues for each tools
 tools_queue = [queue.Queue(), queue.Queue(), queue.Queue(), queue.Queue()]
@@ -67,40 +66,40 @@ def tool_main_loop(_tool, tools_prime_state):
         new_command = tools_queue[_tool.tool_number].get()
         if new_command == Command.LOAD:
             _tool.prepare_movement()
-            print("Tool {}: Starting loading".format(_tool.tool_number))
+            log.info("Tool {}: Starting loading".format(_tool.tool_number))
             if api.load_filament(_tool, tools_prime_state) == 1:
                 _tool.current_state = tool.state.FILAMENT_PRESENT
             else:
-                print("Error while loading filament on tool: {}".format(_tool.tool_number))
+                log.info("Error while loading filament on tool: {}".format(_tool.tool_number))
                 _tool.current_state = tool.state.FILAMENT_NOT_PRESENT
         elif new_command == Command.PRIME:
             _tool.prepare_movement()
-            print("Tool {}: priming".format(_tool.tool_number))
+            log.info("Tool {}: priming".format(_tool.tool_number))
             if api.prime_extruder(_tool, tools_prime_state) == 1:
                 _tool.current_state = tool.state.FILAMENT_PRIMED
                 tools_prime_state[_tool.tool_number].set()
             else:
-                print("Error while priming filament on tool: {}".format(_tool.tool_number))
+                log.info("Error while priming filament on tool: {}".format(_tool.tool_number))
                 _tool.current_state = tool.state.FILAMENT_PRESENT
         elif new_command == Command.RETRACT:
             _tool.prepare_movement()
-            print("Tool {}: Starting retraction".format(_tool.tool_number))
-            if api.retract(_tool, tools_prime_state) == 1:
+            log.info("Tool {}: Starting retraction".format(_tool.tool_number))
+            if api.retract(_tool) == 1:
                 _tool.current_state = tool.state.FILAMENT_PRESENT
                 tools_prime_state[_tool.tool_number].clear()
             else:
-                print("Error while retracting filament on tool: {}".format(_tool.tool_number))
+                log.info("Error while retracting filament on tool: {}".format(_tool.tool_number))
                 _tool.current_state = tool.state.FILAMENT_PRIMED
         elif new_command == Command.UNLOAD:
             _tool.prepare_movement()
             if _tool.current_state == tool.state.FILAMENT_PRIMED:
-                print("Need to retract before unloading")
+                log.info("Need to retract before unloading")
                 api.retract(_tool, tools_prime_state)
-            print("Tool {}: Starting unloading".format(_tool.tool_number))
+            log.info("Tool {}: Starting unloading".format(_tool.tool_number))
             if api.unload_filament(_tool) == 1:
                 _tool.current_state = tool.state.FILAMENT_NOT_PRESENT
             else:
-                print("Error while unloading filament on tool: {}".format(_tool.tool_number))
+                log.info("Error while unloading filament on tool: {}".format(_tool.tool_number))
                 _tool.current_state = tool.state.FILAMENT_PRESENT
         elif new_command == Command.PROBE:
              _tool.prepare_movement()
@@ -108,9 +107,9 @@ def tool_main_loop(_tool, tools_prime_state):
                 _tool.current_state = tool.state.FILAMENT_PRIMED
 
         else:
-            print("Error, wrong command received")
+            log.info("Error, wrong command received")
         time.sleep(1)
-        print("Tool {}: Curren state: {}".format(_tool.tool_number, _tool.current_state))
+        print("Tool {}: Current state: {}".format(_tool.tool_number, _tool.current_state))
 
 # Program entry
 move_request = Thread(target=intercept_move_request)
@@ -124,6 +123,7 @@ if __name__ == "__main__":
     #Configure everything on entry
     api = tray_api.movement_api()
     move_request.start()
+    log.info("Starting Tray logger")
     while(True):
         print("Tools state: Tool 0: {}, Tool 1: {}, Tool 2: {}, Tool 3: {}".format(tool_0.current_state, tool_1.current_state, tool_2.current_state, tool_3.current_state))
-        time.sleep(2)
+        time.sleep(20)

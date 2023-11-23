@@ -22,3 +22,8 @@ def transcieve(message):
             return True
         else:
             return res
+def send_message(message, message_type):
+    try:
+        res = command_connection.write_message(message_type, message, True, LogLevel.Info)
+    except Exception as e:
+        print(e)
