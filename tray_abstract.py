@@ -1,4 +1,3 @@
-
 #Libraries
 import json
 import time
@@ -6,7 +5,8 @@ from enum import IntEnum
 # Connect to dsf socket
 from tray_communication import transcieve
 
-from dsf.connections import SubscribeConnection, SubscriptionMode
+from dsf.connections import SubscribeConnection, SubscriptionMode, CommandConnection
+
 subscribe_connection = SubscribeConnection(SubscriptionMode.FULL)
 subscribe_connection.connect()
 
@@ -43,15 +43,18 @@ class tool:
         self.upper_sensor = _upper_sensor
         self.extruder_sensor = _extruder_sensor
         self.current_state = self.state.UNDEFINED
+        self.command_connection = CommandConnection(debug=False)
+        self.command_connection.connect()
     def __str__(self) -> str:
         return f"None"
 # # Get state for tool sensors
     def get_sensors_state(self):
         try:
-            sensors_gpln = transcieve("""M409 K"'sensors.gpIn"'""")
+            sensors_gpln = transcieve("""M409 K"'sensors.gpIn"'""", self.command_connection)
             # sensors_gpln = subscribe_connection.get_object_model().sensors.gp_in
             time.sleep(0.2)
-            sensors_filament_runout = transcieve("""M409 K"'sensors.filamentMonitors"'""")
+            sensors_filament_runout = transcieve("""M409 K"'sensors.filamentMonitors"'""", self.command_connection)
+            time.sleep(0.2)
             # sensors_filament_runout = subscribe_connection.get_object_model().sensors.filament_monitors
         except Exception as e:
             print(e)
@@ -59,16 +62,21 @@ class tool:
         try:
             parsed_sensors_gpln = json.loads(sensors_gpln)["result"]
             parsed_sensors_filament_runout = json.loads(sensors_filament_runout)["result"]
-            tray_fr_state = 0
-            if parsed_sensors_filament_runout[self.lower_sensor]["status"] == 'ok':
-                tray_fr_state = 1
-            sensors_state =   [tray_fr_state,
-                              parsed_sensors_gpln[self.upper_sensor]["value"],
-                              parsed_sensors_gpln[self.extruder_sensor]["value"]]
-            return sensors_state
+            if len(parsed_sensors_filament_runout) == 6 and len(parsed_sensors_gpln) == 22:
+                tray_fr_state = 0
+                if parsed_sensors_filament_runout[self.lower_sensor]["status"] == 'ok':
+                    tray_fr_state = 1
+                sensors_state =   [tray_fr_state,
+                                  parsed_sensors_gpln[self.upper_sensor]["value"],
+                                  parsed_sensors_gpln[self.extruder_sensor]["value"]]
+                if sensors_state != None:
+                    return sensors_state
+            else:
+                self.get_sensors_state()
         except Exception as e:
             print("Exception druing parsing Json")
             return self.get_sensors_state()
+
     def evaluate_state(self, sensors_state):
         if sensors_state[tool.sensor_position.UPPER] == tool.sensor_state.FILAMENT_PRESENT:
             return tool.state.FILAMENT_LOADED
@@ -84,13 +92,13 @@ class tool:
             return tool.sensor_state.FILAMENT_NOT_PRESENT
     def prepare_movement(self):
         # Allow movement of un-homed axis
-        transcieve("M564 H0 S0")
+        transcieve("M564 H0 S0", self.command_connection)
         # relative movement
-        transcieve("G91")
+        transcieve("G91", self.command_connection)
         # select second movement queue
-        transcieve("M596 P1")
+        transcieve("M596 P1", self.command_connection)
         # relative extrusion
-        transcieve("M83")
+        transcieve("M83", self.command_connection)
 # # Prepare trays for movement
     def calculate_wait_time(self,distance, feedrate):
         # feedrate in mm/min
@@ -99,4 +107,4 @@ class tool:
 # # Execute movement
     def execut_moves(self, trays_moves):
         message = "G1 {}{} F{}".format(trays_moves.axis, trays_moves.setpoint, trays_moves.feedrate)
-        transcieve(message)
+        transcieve(message, self.command_connection)

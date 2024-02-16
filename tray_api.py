@@ -11,7 +11,7 @@ log = logging.getLogger('Tray logger')
 log.addHandler(journal.JournaldLogHandler())
 log.setLevel(logging.INFO)
 
-subscribe_connection = SubscribeConnection(SubscriptionMode.PATCH)
+subscribe_connection = SubscribeConnection(SubscriptionMode.FULL)
 subscribe_connection.connect()
 
 ### This file contains high level API for developing control functions for tray system. ###
@@ -22,10 +22,10 @@ class movement_api:
         pass
 # # Perform check for hotend temperature.
     def check_if_is_hot(self, _tool):
-        # message = """M409 K"'heat.heaters[{}].current"'""".format(_tool.extruder)
-        # res = transcieve(message)
-        # current_temperature = json.loads(res)["result"]
-        current_temperature = subscribe_connection.get_object_model().heat.heaters[_tool.extruder].current
+        message = """M409 K"'heat.heaters[{}].current"'""".format(_tool.extruder)
+        res = transcieve(message, _tool.command_connection)
+        current_temperature = json.loads(res)["result"]
+        # current_temperature = subscribe_connection.get_object_model().heat.heaters[_tool.extruder].current
         if current_temperature <= 200: # <-- magic number, fix by getting info from RFID
             log.info("Cant prime extruder if its not hot")
             send_message("Tool {}: extruder is not hot!".format(_tool.tool_number), MessageType.Error)
@@ -34,17 +34,29 @@ class movement_api:
 # # Perform check for filament presence at extruder.
     def probing_move(self, _tool):
         #local variables.
-        is_present = tool.sensor_state.FILAMENT_NOT_PRESENT
+        _tool.command_connection.perform_simple_code("T{}".format(_tool.tool_number))
         sensors_state = _tool.get_sensors_state()
         # retract some filament and check for state.
-        _tool.execut_moves(move("e", 3, 500))
-        time.sleep(_tool.calculate_wait_time( 3, 500)/2)
-        sensors_state = _tool.get_sensors_state()
-        _tool.execut_moves(move("e", -3, 500))
-        time.sleep(_tool.calculate_wait_time( 3, 500)/2)
-        sensors_state = _tool.get_sensors_state()
-        is_present = (sensors_state[tool.sensor_position.EXTRUDER])
-        return is_present
+        for i in range(0,3):
+            _tool.execut_moves(move(_tool.motor_axis, -8, 500))
+            time.sleep(_tool.calculate_wait_time( 10, 500)/2)
+            sensors_state = _tool.get_sensors_state()
+            if (sensors_state[tool.sensor_position.EXTRUDER]) == 1:
+                return tool.sensor_state.FILAMENT_PRESENT
+            _tool.execut_moves(move(_tool.motor_axis, 8, 500))
+            time.sleep(_tool.calculate_wait_time( 10, 500)/2)
+            sensors_state = _tool.get_sensors_state()
+            if (sensors_state[tool.sensor_position.EXTRUDER]) == 1:
+                return tool.sensor_state.FILAMENT_PRESENT
+        return tool.sensor_state.FILAMENT_NOT_PRESENT
+        # sensors_state = _tool.get_sensors_state()
+        # time.sleep(_tool.calculate_wait_time( 11, 500)/4)
+        # sensors_state = _tool.get_sensors_state()
+        # _tool.execut_moves(move(_tool.motor_axis, 11, 500))
+        # time.sleep(_tool.calculate_wait_time( 11, 500)/2)
+        # sensors_state = _tool.get_sensors_state()
+        # if (sensors_state[tool.sensor_position.EXTRUDER]) == 1:
+        #     return tool.sensor_state.FILAMENT_PRESENT
 # # Load filament.
     def load_filament(self, _tool, _tools_prime_state):
         if _tool.current_state != tool.state.FILAMENT_LOADED:
@@ -99,7 +111,7 @@ class movement_api:
                 send_message("Tool {}: Timeout while loading filament into feeder".format(_tool.tool_number), MessageType.Error)
                 return 0
         log.info("Filament loaded into a feeder")
-        for i in range (0, 80):
+        for i in range (0, 76):
             _tool.execut_moves(move(_tool.motor_axis, 10, 3000))
             time.sleep(_tool.calculate_wait_time(10, 3000))
         log.info("Tool {}: Filament loaded into a feeder".format(_tool.tool_number))
@@ -110,7 +122,7 @@ class movement_api:
         ref_time = time.time()
         while(sensors_state[tool.sensor_position.LOWER] == tool.sensor_state.FILAMENT_PRESENT):
             # Wait for filament to be unloaded
-            tool_move = move(_tool.motor_axis, -10 , 3000)
+            tool_move = move(_tool.motor_axis, -40 , 6000)
             _tool.execut_moves(tool_move)
             if time.time() - ref_time > 70:
                 log.info("Tool {}: Failed to unload filament due to timeout".format(_tool.tool_number))
@@ -131,21 +143,24 @@ class movement_api:
             send_message("Cant prime because other Extruder is primed", MessageType.Error)
             return 0
         # Select tool
-        transcieve("T{}".format(_tool.tool_number))
+        transcieve("T{}".format(_tool.tool_number), _tool.command_connection)
         # Check if filament is present at extruder
-        state = self.probing_move(_tool)
         # Check if its hot
         if self.check_if_is_hot(_tool) != True:
             return 0
         # set extruder to relative mode
-        transcieve("M83")
+        transcieve("M83", _tool.command_connection)
         sensors_state = _tool.get_sensors_state()
+        state = self.probing_move(_tool)
+        if state == tool.sensor_state.FILAMENT_PRESENT:
+            send_message("Tool already primed", MessageType.Success)
+            return 1
         # Push filament to extruder sensor, if its not there.
         ref_time = time.time()
         if state != tool.sensor_state.FILAMENT_PRESENT:
             while(sensors_state[tool.sensor_position.EXTRUDER] != tool.sensor_state.FILAMENT_PRESENT):
                 print("priming extruder...")
-                tool_move = move(_tool.motor_axis, 5, 700)
+                tool_move = move("e", 10, 1000)
                 _tool.execut_moves(tool_move)
                 sensors_state = _tool.get_sensors_state()
                 if time.time() - ref_time > 50:
@@ -169,7 +184,7 @@ class movement_api:
         # Check if its primed, else abort
         if _tool.current_state == tool.state.FILAMENT_PRIMED or _tool.current_state == tool.state.FILAMENT_LOADED :
             # Select tool
-            transcieve("T{}".format(_tool.tool_number))
+            transcieve("T{}".format(_tool.tool_number), _tool.command_connection)
             # Check if its hot
             if self.check_if_is_hot(_tool) != True:
                 return 0
@@ -177,10 +192,15 @@ class movement_api:
             tool_move = move("e", 10, 800)
             _tool.execut_moves(tool_move)
             time.sleep(_tool.calculate_wait_time(10, 800))
-            # Create move command to retract filament from extruder
-            tool_move = move("e", -90, 1500)
+            # Create move command to retract filament from nozzle and wait for filament to cool down
+            tool_move = move("e", -30, 1500)
             _tool.execut_moves(tool_move)
-            time.sleep(_tool.calculate_wait_time(90, 1500))
+            time.sleep(_tool.calculate_wait_time(30, 1500))
+            time.sleep(1)
+            # retract from extruder
+            tool_move = move("e", -60, 1500)
+            _tool.execut_moves(tool_move)
+            time.sleep(_tool.calculate_wait_time(60, 1500))
             # Create move command to retract filament to tee at higher speed
             tool_move = move(_tool.motor_axis, -55, 2500)
             _tool.execut_moves(tool_move)
@@ -188,6 +208,12 @@ class movement_api:
             log.info("Filament retracted")
         else:
             pass
+        return 1
+
+    def retract_and_unload(self, _tool):
+        self.retract(_tool)
+        time.sleep(1)
+        self.unload_filament(_tool)
         return 1
 
 
