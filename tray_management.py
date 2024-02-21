@@ -206,15 +206,18 @@ def tool_main_loop(_tool, tools_prime_state):
                 tools_state_queue.put([_tool.tool_number,  _tool.current_state])
         new_command = tools_queue[_tool.tool_number].get()
         if new_command == Command.LOAD:
-            _tool.prepare_movement()
-            log.info("Tool {}: Starting loading".format(_tool.tool_number))
-            if api.load_filament_wo_sensor(_tool, tools_prime_state) == 1:
-                _tool.current_state = tool.state.FILAMENT_LOADED
-                tools_state_queue.put([_tool.tool_number,  _tool.current_state])
+            if _tool.current_state != tool.state.FILAMENT_LOADED:
+                _tool.prepare_movement()
+                log.info("Tool {}: Starting loading".format(_tool.tool_number))
+                if api.load_filament_wo_sensor(_tool, tools_prime_state) == 1:
+                    _tool.current_state = tool.state.FILAMENT_LOADED
+                    tools_state_queue.put([_tool.tool_number,  _tool.current_state])
+                else:
+                    log.info("Error while loading filament on tool: {}".format(_tool.tool_number))
+                    _tool.current_state = tool.state.FILAMENT_NOT_PRESENT
+                    tools_state_queue.put([_tool.tool_number,  _tool.current_state])
             else:
-                log.info("Error while loading filament on tool: {}".format(_tool.tool_number))
-                _tool.current_state = tool.state.FILAMENT_NOT_PRESENT
-                tools_state_queue.put([_tool.tool_number,  _tool.current_state])
+                print("filament already loaded")
         elif new_command == Command.PRIME:
             _tool.prepare_movement()
             log.info("Tool {}: priming".format(_tool.tool_number))
