@@ -24,10 +24,10 @@ tools_prime_state = [Event(), Event(), Event(), Event()]
 tools_queue = [queue.Queue(), queue.Queue(), queue.Queue(), queue.Queue()]
 tools_state_queue = queue.Queue()
 tools_state = [-1, -1, -1, -1]
-tool_array = [tool(0, 0, 11.1, "A", 0, 4, 19, 16),
-              tool(1, 1, 10.1, "V", 1, 2, 14, 21),
-              tool(2, 2, 11.0, "W", 0, 5, 15, 16),
-              tool(3, 3, 10.0, "U", 1, 3, 20, 21),]
+tool_array = [tool(0, 2, 11.1, "A", 0, 4, 19, 16),
+              tool(1, 3, 10.1, "V", 1, 2, 14, 21),
+              tool(2, 0, 11.0, "W", 0, 5, 15, 16),
+              tool(3, 1, 10.0, "U", 1, 3, 20, 21),]
 # Enum describing commands
 class Command(IntEnum):
     LOAD = 0,
@@ -277,12 +277,12 @@ data_request = Thread(target=intercept_data_request)
 owc_request = Thread(target=intercept_owc_request)
 # Create thread for each tool, delay start of each thread to avoid overlapping dcs requests
 tool_0_thread = Thread(target=tool_main_loop, args=(tool_array[0], tools_prime_state,)).start()
-# time.sleep(1)
-# tool_1_thread = Thread(target=tool_main_loop, args=(tool_array[1], tools_prime_state,)).start()
-# time.sleep(1)
-# tool_2_thread = Thread(target=tool_main_loop, args=(tool_array[2], tools_prime_state,)).start()
-# time.sleep(1)
-# tool_3_thread = Thread(target=tool_main_loop, args=(tool_array[3], tools_prime_state,)).start()
+time.sleep(1)
+tool_1_thread = Thread(target=tool_main_loop, args=(tool_array[1], tools_prime_state,)).start()
+time.sleep(1)
+tool_2_thread = Thread(target=tool_main_loop, args=(tool_array[2], tools_prime_state,)).start()
+time.sleep(1)
+tool_3_thread = Thread(target=tool_main_loop, args=(tool_array[3], tools_prime_state,)).start()
 # Create thread for receiving sensors state
 # tool_state_thread =  Thread(target=tool.get_sensors_state, ).start()
 
@@ -326,5 +326,18 @@ if __name__ == "__main__":
     while(True):
         state = tools_state_queue.get()
         tools_state[state[0]] = state[1]
+        command_connection = CommandConnection(debug=False)
+        command_connection.connect()
+
+        data =  {
+            "T0": tools_state[0],
+            "T1": tools_state[1],
+            "T2": tools_state[2],
+            "T3": tools_state[3]
+        }
+        message = json.dumps(data)
+
+        command_connection.perform_simple_code(f' set global.={message}')
+
         # print("Tools state: Tool 0: {}, Tool 1: {}, Tool 2: {}, Tool 3: {}".format(tool_0.current_state, tool_1.current_state, tool_2.current_state, tool_3.current_state))
         time.sleep(3)
