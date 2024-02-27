@@ -51,7 +51,7 @@ class tool:
     def get_sensors_state(self):
         try:
             sensors_gpln = transcieve("""M409 K"'sensors.gpIn"'""", self.command_connection)
-            sensors_gpln = subscribe_connection.get_object_model().sensors.gp_in
+            # sensors_gpln = subscribe_connection.get_object_model().sensors.gp_in
             time.sleep(0.2)
             sensors_filament_runout = transcieve("""M409 K"'sensors.filamentMonitors"'""", self.command_connection)
             time.sleep(0.2)

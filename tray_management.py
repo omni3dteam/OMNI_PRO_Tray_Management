@@ -293,35 +293,33 @@ if __name__ == "__main__":
     data_request.start()
     owc_request.start()
     log.info("Starting Tray logger")
-    time.sleep(0.5)
     subscribe_connection = SubscribeConnection(SubscriptionMode.FULL)
     subscribe_connection.connect()
     command_connection = CommandConnection(debug=False)
     command_connection.connect()
     object_model = subscribe_connection.get_object_model()
-    # if object_model.heat.heaters[0].current < 200:
-    #     command_connection.perform_simple_code("M104 S250 T0")
-    #     command_connection.perform_simple_code("M104 S250 T2")
-    # if object_model.heat.heaters[1].current < 200:
-    #     command_connection.perform_simple_code("M104 S250 T1")
-    #     command_connection.perform_simple_code("M104 S250 T3")
 
-    # while object_model.heat.heaters[0].current < 240:
-    #     object_model = subscribe_connection.get_object_model()
-    #     time.sleep(5)
-    # while object_model.heat.heaters[1].current < 240:
-    #     object_model = subscribe_connection.get_object_model()
-    #     time.sleep(5)
+    time.sleep(5)
+    command_connection.perform_simple_code("M104 T1 S250")
+    time.sleep(5)
+    command_connection.perform_simple_code("M104 T0 S250")
 
-    # for _tool in tool_array:
-    #     if _tool.current_state == 2:
-    #         tools_queue[_tool.tool_number].put(Command.PROBE)
-    #         time.sleep(15)
+    while object_model.heat.heaters[0].current < 240:
+        object_model = subscribe_connection.get_object_model()
+        time.sleep(5)
+    while object_model.heat.heaters[1].current < 240:
+        object_model = subscribe_connection.get_object_model()
+        time.sleep(5)
 
-    # command_connection.perform_simple_code("M104 S0 T0")
-    # command_connection.perform_simple_code("M104 S0 T1")
-    # command_connection.perform_simple_code("M104 S0 T2")
-    # command_connection.perform_simple_code("M104 S0 T3")
+    for _tool in tool_array:
+        if _tool.current_state == 2:
+            tools_queue[_tool.tool_number].put(Command.PROBE)
+            time.sleep(15)
+
+    command_connection.perform_simple_code("G10 T0 S0")
+    command_connection.perform_simple_code("G10 T1 S0")
+    command_connection.perform_simple_code("G10 T2 S0")
+    command_connection.perform_simple_code("G10 T3 S0")
 
     while(True):
         state = tools_state_queue.get()
