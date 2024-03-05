@@ -134,6 +134,7 @@ class movement_api:
         #     tool_move = move(_tool.motor_axis, -10 , 3000)
         #     _tool.execut_moves(tool_move)
         log.info("Filament Unloaded")
+        return 1
 
 # # Push filament all the way into hotend.
     def prime_extruder(self, _tool, tools_prime_state):

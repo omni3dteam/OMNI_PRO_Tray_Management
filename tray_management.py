@@ -246,7 +246,6 @@ def tool_main_loop(_tool, tools_prime_state):
             if _tool.current_state == tool.state.FILAMENT_PRIMED:
                 log.info("Need to retract before unloading")
                 api.retract(_tool, tools_prime_state)
-                api.retract(_tool, tools_prime_state)
             log.info("Tool {}: Starting unloading".format(_tool.tool_number))
             if api.unload_filament(_tool) == 1:
                 _tool.current_state = tool.state.FILAMENT_PRESENT
@@ -260,12 +259,36 @@ def tool_main_loop(_tool, tools_prime_state):
              if api.probing_move(_tool) == tool.sensor_state.FILAMENT_PRESENT:
                 _tool.current_state = tool.state.FILAMENT_PRIMED
                 tools_state_queue.put([_tool.tool_number,  _tool.current_state])
-        elif new_command == Command.RETRACT_AND_UNLOAD:
 
-             _tool.prepare_movement()
-             if api.retract_and_unload(_tool) == 1:
-                _tool.current_state = tool.state.FILAMENT_NOT_PRESENT
-                tools_state_queue.put([_tool.tool_number,  _tool.current_state])
+        elif new_command == Command.RETRACT_AND_UNLOAD:
+            _tool.prepare_movement()
+            if _tool.current_state == tool.state.FILAMENT_PRIMED:
+                if api.retract(_tool) == 1:
+                    _tool.current_state = tool.state.FILAMENT_LOADED
+                    tools_state_queue.put([_tool.tool_number,  _tool.current_state])
+                    tools_prime_state[_tool.tool_number].clear()
+                    if api.unload_filament(_tool) == 1:
+                        _tool.current_state = tool.state.FILAMENT_PRESENT
+                        tools_state_queue.put([_tool.tool_number,  _tool.current_state])
+                    else:
+                        log.info("Error while unloading filament on tool: {}".format(_tool.tool_number))
+                        _tool.current_state = tool.state.FILAMENT_LOADED
+                        tools_state_queue.put([_tool.tool_number,  _tool.current_state])
+                else:
+                    log.info("Error while retracting filament on tool: {}".format(_tool.tool_number))
+                    _tool.current_state = tool.state.FILAMENT_PRIMED
+                    tools_state_queue.put([_tool.tool_number,  _tool.current_state])
+            else:
+                if api.unload_filament(_tool) == 1:
+                    _tool.current_state = tool.state.FILAMENT_PRESENT
+                    tools_state_queue.put([_tool.tool_number,  _tool.current_state])
+                else:
+                    log.info("Error while unloading filament on tool: {}".format(_tool.tool_number))
+                    _tool.current_state = tool.state.FILAMENT_LOADED
+                    tools_state_queue.put([_tool.tool_number,  _tool.current_state])
+        #     if api.retract_and_unload(_tool) == 1:
+        #         _tool.current_state = tool.state.FILAMENT_NOT_PRESENT
+        #         tools_state_queue.put([_tool.tool_number,  _tool.current_state])
         else:
             log.info("Error, wrong command received")
         time.sleep(1)
@@ -297,29 +320,29 @@ if __name__ == "__main__":
     subscribe_connection.connect()
     command_connection = CommandConnection(debug=False)
     command_connection.connect()
-    object_model = subscribe_connection.get_object_model()
+    # object_model = subscribe_connection.get_object_model()
 
-    time.sleep(5)
-    command_connection.perform_simple_code("M104 T1 S250")
-    time.sleep(5)
-    command_connection.perform_simple_code("M104 T0 S250")
+    # time.sleep(5)
+    # command_connection.perform_simple_code("M104 T1 S250")
+    # time.sleep(5)
+    # command_connection.perform_simple_code("M104 T0 S250")
 
-    while object_model.heat.heaters[0].current < 240:
-        object_model = subscribe_connection.get_object_model()
-        time.sleep(5)
-    while object_model.heat.heaters[1].current < 240:
-        object_model = subscribe_connection.get_object_model()
-        time.sleep(5)
+    # while object_model.heat.heaters[0].current < 240:
+    #     object_model = subscribe_connection.get_object_model()
+    #     time.sleep(5)
+    # while object_model.heat.heaters[1].current < 240:
+    #     object_model = subscribe_connection.get_object_model()
+    #     time.sleep(5)
 
     for _tool in tool_array:
         if _tool.current_state == 2:
             tools_queue[_tool.tool_number].put(Command.PROBE)
             time.sleep(15)
 
-    command_connection.perform_simple_code("G10 T0 S0")
-    command_connection.perform_simple_code("G10 T1 S0")
-    command_connection.perform_simple_code("G10 T2 S0")
-    command_connection.perform_simple_code("G10 T3 S0")
+    # command_connection.perform_simple_code("G10 T0 S0")
+    # command_connection.perform_simple_code("G10 T1 S0")
+    # command_connection.perform_simple_code("G10 T2 S0")
+    # command_connection.perform_simple_code("G10 T3 S0")
 
     while(True):
         state = tools_state_queue.get()
