@@ -6,9 +6,9 @@ import time
 import json
 # Configure logger
 import logging
-from systemd import journal
+# from systemd import journal
 log = logging.getLogger('Tray logger')
-log.addHandler(journal.JournaldLogHandler())
+# log.addHandler(journal.JournaldLogHandler())
 log.setLevel(logging.INFO)
 
 subscribe_connection = SubscribeConnection(SubscriptionMode.FULL)
@@ -122,7 +122,7 @@ class movement_api:
         ref_time = time.time()
         while(sensors_state[tool.sensor_position.LOWER] == tool.sensor_state.FILAMENT_PRESENT):
             # Wait for filament to be unloaded
-            tool_move = move(_tool.motor_axis, -40 , 6000)
+            tool_move = move(_tool.motor_axis, -40 , 5000)
             _tool.execut_moves(tool_move)
             if time.time() - ref_time > 70:
                 log.info("Tool {}: Failed to unload filament due to timeout".format(_tool.tool_number))
@@ -208,7 +208,7 @@ class movement_api:
             time.sleep(_tool.calculate_wait_time(55, 2500))
             log.info("Filament retracted")
         else:
-            pass
+            return 0
         return 1
 
     def retract_and_unload(self, _tool):
