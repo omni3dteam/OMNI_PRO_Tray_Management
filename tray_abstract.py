@@ -3,9 +3,9 @@ import json
 import time
 from enum import IntEnum
 from threading import Thread
-
-from tray_communication import transcieve, send_message
-from dsf.object_model import MessageType
+# Python DSF
+from dsf.object_model import MessageType, LogLevel
+# Modules
 from tray_logging import log
 
 import queue
@@ -63,10 +63,10 @@ class tool:
 # # Get state for tool sensors
     def get_sensors_state(self):
         try:
-            sensors_gpln = transcieve("""M409 K"'sensors.gpIn"'""", self.command_connection)
+            sensors_gpln = self.transcieve("""M409 K"'sensors.gpIn"'""")
             # sensors_gpln = subscribe_connection.get_object_model().sensors.gp_in
             time.sleep(0.2)
-            sensors_filament_runout = transcieve("""M409 K"'sensors.filamentMonitors"'""", self.command_connection)
+            sensors_filament_runout = self.transcieve("""M409 K"'sensors.filamentMonitors"'""")
             time.sleep(0.2)
             # sensors_filament_runout = subscribe_connection.get_object_model().sensors.filament_monitors
         except Exception as e:
@@ -98,13 +98,13 @@ class tool:
             return tool.sensor_state.FILAMENT_NOT_PRESENT
     def prepare_movement(self):
         # Allow movement of un-homed axis
-        # transcieve("M564 H0 S0", self.command_connection)
+        self.transcieve("M564 H0 S0")
         # relative movement
-        transcieve("G91", self.command_connection)
+        self.transcieve("G91")
         # select second movement queue
-        # transcieve("M596 P1", self.command_connection)
+        self.transcieve("M596 P1")
         # relative extrusion
-        transcieve("M83", self.command_connection)
+        self.transcieve("M83")
 # # Prepare trays for movement
     def calculate_wait_time(self,distance, feedrate):
         # feedrate in mm/min, return time in seconds
@@ -112,16 +112,32 @@ class tool:
 # # Execute movement
     def execut_moves(self, trays_moves):
         message = "G1 {}{} F{}".format(trays_moves.axis, trays_moves.setpoint, trays_moves.feedrate)
-        transcieve(message, self.command_connection)
+        self.transcieve(message)
+    def transcieve(self, message):
+        try:
+            res = self.command_connection.perform_simple_code(message)
+        except Exception as e:
+            print(e)
+            return False
+        finally:
+            if res == '':
+                return True
+            else:
+                return res
+    def send_message(self, message, message_type):
+        try:
+            res = self.command_connection.write_message(message_type, message, True, LogLevel.Info)
+        except Exception as e:
+            print(e)
 # # Perform check for hotend temperature.
     def check_if_is_hot(self):
         message = """M409 K"'heat.heaters[{}].current"'""".format(self.extruder)
-        res = transcieve(message, self.command_connection)
+        res = self.transcieve(message)
         current_temperature = json.loads(res)["result"]
         # current_temperature = subscribe_connection.get_object_model().heat.heaters[self.extruder].current
         if current_temperature <= 200: # <-- magic number, fix by getting info from RFID
-            log.info("Cant prime extruder if its not hot")
-            send_message("Tool {}: extruder is not hot!".format(self.tool_number), MessageType.Error)
+            log.send_info_log("Cant prime extruder if its not hot")
+            self.send_message("Tool {}: extruder is not hot!".format(self.tool_number), MessageType.Error)
             return 0
         return 1
 # # Perform check for filament presence at extruder.
@@ -154,14 +170,14 @@ class tool:
             sensors_state = self.get_sensors_state()
             time.sleep(0.2)
             if time.time() - ref_time > 60:
-                log.info("Tool {}: Timeout while loading filament into feeder".format(self.tool_number))
-                send_message("Tool {}: Timeout while loading filament into feeder".format(self.tool_number), MessageType.Error)
+                log.send_error_log("Tool {}: Timeout while loading filament into feeder".format(self.tool_number))
+                self.send_message("Tool {}: Timeout while loading filament into feeder".format(self.tool_number), MessageType.Error)
                 return 0
-        log.info("Filament loaded into a feeder")
+        log.send_info_log("Filament loaded into a feeder")
         for i in range (0, 76):
             self.execut_moves(move(self.motor_axis, 10, 3000))
             time.sleep(self.calculate_wait_time(10, 3000))
-        log.info("Tool {}: Filament loaded into a feeder".format(self.tool_number))
+        log.send_waring_log("Tool {}: Filament loaded into a feeder".format(self.tool_number))
         return 1
 # # Unload filament.
     def unload_filament(self):
@@ -172,35 +188,35 @@ class tool:
             tool_move = move(self.motor_axis, -40 , 5000)
             self.execut_moves(tool_move)
             if time.time() - ref_time > 70:
-                log.info("Tool {}: Failed to unload filament due to timeout".format(self.tool_number))
-                send_message("Tool {}: Failed to unload filament due to timeout".format(self.tool_number), MessageType.Error)
+                log.send_error_log("Tool {}: Failed to unload filament due to timeout".format(self.tool_number))
+                self.send_message("Tool {}: Failed to unload filament due to timeout".format(self.tool_number), MessageType.Error)
                 return 0
             sensors_state = self.get_sensors_state()
         # sensors_state = self.get_sensors_state()
         # while(sensors_state[tool.sensor_position.LOWER] == tool.sensor_state.FILAMENT_PRESENT):
         #     tool_move = move(self.motor_axis, -10 , 3000)
         #     self.execut_moves(tool_move)
-        log.info("Filament Unloaded")
+        log.send_debug_log("Filament Unloaded")
         return 1
 # # Push filament all the way into hotend.
-    def prime_extruder(self, tools_prime_state):
+    def prime_extruder(self):
         # Check if other filament is in the way
-        if tools_prime_state[self.neighbourself_number].is_set():
+        if tools[self.neighbour_tool_number].current_state == self.state.FILAMENT_PRIMED:
             log.info("Cant prime because other Extruder is primed")
-            send_message("Cant prime because other Extruder is primed", MessageType.Error)
+            self.send_message("Cant prime because other Extruder is primed", MessageType.Error)
             return 0
         # Select tool
-        transcieve("T{}".format(self.tool_number), self.command_connection)
+        self.transcieve("T{}".format(self.tool_number))
         # Check if filament is present at extruder
         # Check if its hot
-        if self.check_if_is_hot(self) != True:
+        if self.check_if_is_hot() != True:
             return 0
         # set extruder to relative mode
-        transcieve("M83", self.command_connection)
+        self.transcieve("M83")
         sensors_state = self.get_sensors_state()
-        state = self.probing_move(self)
+        state = self.probing_move()
         if state == tool.sensor_state.FILAMENT_PRESENT:
-            send_message("Tool already primed", MessageType.Success)
+            self.send_message("Tool already primed", MessageType.Success)
             return 1
         # Push filament to extruder sensor, if its not there.
         ref_time = time.time()
@@ -212,7 +228,7 @@ class tool:
                 sensors_state = self.get_sensors_state()
                 if time.time() - ref_time > 50:
                     log.info("Tool {}: Failed to prime filament due to timeout".format(self.tool_number))
-                    send_message("Tool {}: Failed to prime filament due to timeout".format(self.tool_number), MessageType.Error)
+                    self.send_message("Tool {}: Failed to prime filament due to timeout".format(self.tool_number), MessageType.Error)
                     return 0
         # else, just prime it.
         # # note that we are passing "e" instead of self.motor_axis
@@ -224,16 +240,16 @@ class tool:
         tool_move = move("e", 40, 700)
         self.execut_moves(tool_move)
         time.sleep(self.calculate_wait_time(90, 700))
-        log.info("extruder primed")
+        log.send_info_log("extruder primed")
         return 1
 # # retract filament from hotend.
     def retract(self):
         # Check if its primed, else abort
         if self.current_state == tool.state.FILAMENT_PRIMED or self.current_state == tool.state.FILAMENT_LOADED :
             # Select tool
-            transcieve("T{}".format(self.tool_number), self.command_connection)
+            self.transcieve("T{}".format(self.tool_number))
             # Check if its hot
-            if self.check_if_is_hot(self) != True:
+            if self.check_if_is_hot() != True:
                 return 0
             # Do a small push
             tool_move = move("e", 10, 800)
@@ -252,15 +268,14 @@ class tool:
             tool_move = move(self.motor_axis, -55, 2500)
             self.execut_moves(tool_move)
             time.sleep(self.calculate_wait_time(55, 2500))
-            log.info("Filament retracted")
         else:
             return 0
         return 1
 
     def retract_and_unload(self):
-        self.retract(self)
+        self.retract()
         time.sleep(1)
-        self.unload_filament(self)
+        self.unload_filament()
         return 1
 
     # Tool main loop
@@ -279,73 +294,138 @@ class tool:
                 time.sleep(1)
                 if sensors_state[tool.sensor_position.LOWER] == tool.sensor_state.FILAMENT_PRESENT:
                     self.prepare_movement()
-                    self.load_filament_wo_sensor(self)
+                    self.load_filament_wo_sensor()
                     self.current_state = tool.state.FILAMENT_LOADED
             new_command = tools_queue[self.tool_number].get()
             if new_command == self.Command.LOAD:
                 if self.current_state != tool.state.FILAMENT_LOADED:
                     self.prepare_movement()
-                    log.info("Tool {}: Starting loading".format(self.tool_number))
+                    log.send_info_log("Tool {}: Starting loading".format(self.tool_number))
                     if self.load_filament_wo_sensor(self) == 1:
                         self.current_state = tool.state.FILAMENT_LOADED
                     else:
-                        log.info("Error while loading filament on tool: {}".format(self.tool_number))
+                        log.send_info_log("Error while loading filament on tool: {}".format(self.tool_number))
                         self.current_state = tool.state.FILAMENT_NOT_PRESENT
                 else:
                     print("filament already loaded")
             elif new_command == self.Command.PRIME:
                 self.prepare_movement()
-                log.info("Tool {}: priming".format(self.tool_number))
-                if self.prime_extruder(self, tools[self.neighbourself_number].current_state) == 1:
+                log.send_info_log("Tool {}: priming".format(self.tool_number))
+                if self.prime_extruder() == 1:
                     self.current_state = tool.state.FILAMENT_PRIMED
                 else:
-                    log.info("Error while priming filament on tool: {}".format(self.tool_number))
+                    log.send_info_log("Error while priming filament on tool: {}".format(self.tool_number))
                     self.current_state = tool.state.FILAMENT_LOADED
             elif new_command == self.Command.RETRACT:
                 self.prepare_movement()
-                log.info("Tool {}: Starting retraction".format(self.tool_number))
-                if self.retract(self) == 1:
+                log.send_info_log("Tool {}: Starting retraction".format(self.tool_number))
+                if self.retract() == 1:
                     self.current_state = tool.state.FILAMENT_LOADED
                 else:
-                    log.info("Error while retracting filament on tool: {}".format(self.tool_number))
+                    log.send_info_log("Error while retracting filament on tool: {}".format(self.tool_number))
                     self.current_state = tool.state.FILAMENT_PRIMED
             elif new_command == self.Command.UNLOAD:
                 self.prepare_movement()
                 if self.current_state == tool.state.FILAMENT_PRIMED:
-                    log.info("Need to retract before unloading")
-                log.info("Tool {}: Starting unloading".format(self.tool_number))
-                if self.unload_filament(self) == 1:
+                    log.send_info_log("Need to retract before unloading")
+                log.send_info_log("Tool {}: Starting unloading".format(self.tool_number))
+                if self.unload_filament() == 1:
                     self.current_state = tool.state.FILAMENT_PRESENT
                 else:
-                    log.info("Error while unloading filament on tool: {}".format(self.tool_number))
+                    log.send_info_log("Error while unloading filament on tool: {}".format(self.tool_number))
                     self.current_state = tool.state.FILAMENT_LOADED
             elif new_command == self.Command.PROBE:
                  self.prepare_movement()
-                 if self.probing_move(self) == tool.sensor_state.FILAMENT_PRESENT:
+                 if self.probing_move() == tool.sensor_state.FILAMENT_PRESENT:
                     self.current_state = tool.state.FILAMENT_PRIMED
 
             elif new_command == self.Command.RETRACT_AND_UNLOAD:
                 self.prepare_movement()
-                if self.current_state == tool.state.FILAMENT_PRIMED:
-                    if self.retract(self) == 1:
+                if((self.current_state == tool.state.FILAMENT_PRIMED) or (self.current_state == tool.state.FILAMENT_LOADED)):
+                    if self.retract() == 1:
                         self.current_state = tool.state.FILAMENT_LOADED
-                        if self.unload_filament(self) == 1:
+                        if self.unload_filament() == 1:
                             self.current_state = tool.state.FILAMENT_PRESENT
                         else:
-                            log.info("Error while unloading filament on tool: {}".format(self.tool_number))
+                            log.send_info_log("Error while unloading filament on tool: {}".format(self.tool_number))
                             self.current_state = tool.state.FILAMENT_LOADED
                     else:
-                        log.info("Error while retracting filament on tool: {}".format(self.tool_number))
+                        log.send_info_log("Error while retracting filament on tool: {}".format(self.tool_number))
                         self.current_state = tool.state.FILAMENT_PRIMED
                 else:
-                    if self.unload_filament(self) == 1:
+                    if self.unload_filament() == 1:
                         self.current_state = tool.state.FILAMENT_PRESENT
                     else:
-                        log.info("Error while unloading filament on tool: {}".format(self.tool_number))
+                        log.send_info_log("Error while unloading filament on tool: {}".format(self.tool_number))
                         self.current_state = tool.state.FILAMENT_LOADED
             else:
-                log.info("Error, wrong command received")
+                log.send_info_log("Error, wrong command received")
             time.sleep(1)
+
+    def basic_move(self, command):
+        if new_command == self.Command.LOAD:
+            if self.current_state != tool.state.FILAMENT_LOADED:
+                self.prepare_movement()
+                log.send_info_log("Tool {}: Starting loading".format(self.tool_number))
+                if self.load_filament_wo_sensor(self) == 1:
+                    self.current_state = tool.state.FILAMENT_LOADED
+                else:
+                    log.send_info_log("Error while loading filament on tool: {}".format(self.tool_number))
+                    self.current_state = tool.state.FILAMENT_NOT_PRESENT
+            else:
+                print("filament already loaded")
+        elif new_command == self.Command.PRIME:
+            self.prepare_movement()
+            log.send_info_log("Tool {}: priming".format(self.tool_number))
+            if self.prime_extruder() == 1:
+                self.current_state = tool.state.FILAMENT_PRIMED
+            else:
+                log.send_info_log("Error while priming filament on tool: {}".format(self.tool_number))
+                self.current_state = tool.state.FILAMENT_LOADED
+        elif new_command == self.Command.RETRACT:
+            self.prepare_movement()
+            log.send_info_log("Tool {}: Starting retraction".format(self.tool_number))
+            if self.retract() == 1:
+                self.current_state = tool.state.FILAMENT_LOADED
+            else:
+                log.send_info_log("Error while retracting filament on tool: {}".format(self.tool_number))
+                self.current_state = tool.state.FILAMENT_PRIMED
+        elif new_command == self.Command.UNLOAD:
+            self.prepare_movement()
+            if self.current_state == tool.state.FILAMENT_PRIMED:
+                log.send_info_log("Need to retract before unloading")
+            log.send_info_log("Tool {}: Starting unloading".format(self.tool_number))
+            if self.unload_filament() == 1:
+                self.current_state = tool.state.FILAMENT_PRESENT
+            else:
+                log.send_info_log("Error while unloading filament on tool: {}".format(self.tool_number))
+                self.current_state = tool.state.FILAMENT_LOADED
+        elif new_command == self.Command.PROBE:
+            self.prepare_movement()
+            if self.probing_move() == tool.sensor_state.FILAMENT_PRESENT:
+                self.current_state = tool.state.FILAMENT_PRIMED
+        elif new_command == self.Command.RETRACT_AND_UNLOAD:
+            self.prepare_movement()
+            if((self.current_state == tool.state.FILAMENT_PRIMED) or (self.current_state == tool.state.FILAMENT_LOADED)):
+                if self.retract() == 1:
+                    self.current_state = tool.state.FILAMENT_LOADED
+                    if self.unload_filament() == 1:
+                        self.current_state = tool.state.FILAMENT_PRESENT
+                    else:
+                        log.send_info_log("Error while unloading filament on tool: {}".format(self.tool_number))
+                        self.current_state = tool.state.FILAMENT_LOADED
+                else:
+                    log.send_info_log("Error while retracting filament on tool: {}".format(self.tool_number))
+                    self.current_state = tool.state.FILAMENT_PRIMED
+            else:
+                if self.unload_filament() == 1:
+                    self.current_state = tool.state.FILAMENT_PRESENT
+                else:
+                    log.send_info_log("Error while unloading filament on tool: {}".format(self.tool_number))
+                    self.current_state = tool.state.FILAMENT_LOADED
+        else:
+            log.send_info_log("Error, wrong command received")
+
 # Declare four tools with desired parameters, and use them globally
 tools = [tool(0, 2, 11.1, "A", 0, 3, 19, 16),
          tool(1, 3, 10.1, "V", 1, 2, 14, 21),

@@ -2,6 +2,8 @@
 import time
 # Initialize tools by importing tray_abstract module
 from tray_abstract import tools
+# Initialize dsf intercept connections
+from dsf_request import request
 # Import logging module
 from tray_logging import log
 
@@ -9,6 +11,7 @@ if __name__ == "__main__":
     #Configure everything on entry
     log.send_info_log("Starting Tray management")
     while(True):
+        
         # TODO: Periodically send tools state to object model
 
         # command_connection = CommandConnection(debug=False)
