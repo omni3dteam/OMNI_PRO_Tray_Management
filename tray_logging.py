@@ -4,9 +4,6 @@ import logging
 class logger:
     def __init__(self):
         pass
-        # self.log_handler = logging.getLogger('Tray logger')
-        # self.log_handler.addHandler(JournalHandler())
-        # self.log_handler.setLevel(logging.INFO)
     def __str__(self):
         pass
     def send_waring_log(self, message):
