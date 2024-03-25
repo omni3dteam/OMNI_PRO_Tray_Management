@@ -93,6 +93,7 @@ class dsf_request:
                     try:
                         tool = cde.parameter("P").as_int()
                         command = cde.parameter("S").as_int()
+                        intercept_connection.resolve_code(MessageType.Success)
                         try:
                             async_mode = cde.parameter("A").as_int()
                         except:

@@ -368,6 +368,7 @@ class tool:
         else:
             log.send_info_log("Error, wrong command received")
 
+time.sleep(10)
 # Declare four tools with desired parameters, and use them globally
 tools = [tool(0, 2, 11.1, "A", 0, 3, 19, 16),
          tool(1, 3, 10.1, "V", 1, 2, 14, 21),

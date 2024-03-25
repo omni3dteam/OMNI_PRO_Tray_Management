@@ -9,18 +9,18 @@ class tray_api:
         pass
     def Synchronous_filament_change(self, tool_to_change, neighbour_tool):
         #Check if its already primed
-        if tools[0].current_state == 3:
-            return MessageType.Warning, "Tool {} is already primed"
+        if tools[tool_to_change].current_state == 3:
+            return MessageType.Warning, "Tool {} is already primed".format(tool_to_change)
         # if its not primed, check if its loaded
-        elif tools[0].current_state == 2:
+        elif tools[tool_to_change].current_state == 2:
             # retract other tool just in case
             if tools[neighbour_tool].retract() == 1:
-                tools[2].current_state = tool.state.FILAMENT_LOADED
+                tools[neighbour_tool].current_state = tool.state.FILAMENT_LOADED
             else:
-                tools[2].current_state = tool.state.FILAMENT_NOT_PRESENT
+                tools[neighbour_tool].current_state = tool.state.FILAMENT_NOT_PRESENT
             # Try to prime selected tool
             if tools[tool_to_change].prime_extruder() == 1:
-                tools[0].current_state = tool.state.FILAMENT_PRIMED
+                tools[tool_to_change].current_state = tool.state.FILAMENT_PRIMED
             else:
                 tools[tool_to_change].current_state = tool.state.FILAMENT_LOADED
                 return MessageType.Error, "Error while priming Tool {}".format(tool_to_change)

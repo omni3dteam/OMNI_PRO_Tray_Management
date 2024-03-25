@@ -26,4 +26,5 @@ if __name__ == "__main__":
         # message = json.dumps(data)
 
         # command_connection.perform_simple_code(f' set global.={message}')
+        print("[DEBUG] tray spinning" )
         time.sleep(3)
