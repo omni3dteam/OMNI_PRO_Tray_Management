@@ -98,7 +98,7 @@ class dsf_request:
                             async_mode = cde.parameter("A").as_int()
                         except:
                             async_mode = 0
-                        if async_mode == 1:
+                        if async_mode == 0:
                             intercept_connection.resolve_code(MessageType.Success)
                             tools_queue[tool].put(command)               
                         else:
