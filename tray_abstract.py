@@ -57,10 +57,6 @@ class tool:
         self.current_state = self.state.UNDEFINED
         self.command_connection = CommandConnection(debug=False)
         self.command_connection.connect()
-        self.loop_command_connection = CommandConnection(debug=False)
-        self.loop_command_connection.connect()
-        self.task_command_connection = CommandConnection(debug=False)
-        self.task_command_connection.connect()
         self.tool_thread = Thread(target=self.tool_main_loop).start()
     def __str__(self) -> str:
         return f"None"
@@ -291,8 +287,6 @@ class tool:
         sensors_state = self.get_sensors_state()
         while(True):
             sensors_state = self.get_sensors_state()
-            if sensors_state[tool.sensor_position.LOWER] == tool.sensor_state.FILAMENT_NOT_PRESENT:
-                self.current_state = tool.state.FILAMENT_NOT_PRESENT
             while sensors_state[tool.sensor_position.LOWER] == tool.sensor_state.FILAMENT_NOT_PRESENT:
                 sensors_state = self.get_sensors_state()
                 time.sleep(1)
@@ -300,10 +294,8 @@ class tool:
                     self.prepare_movement()
                     self.load_filament_wo_sensor()
                     self.current_state = tool.state.FILAMENT_LOADED
-            # if not tools_queue[self.tool_number].empty():
-            self.basic_move(tools_queue[self.tool_number].get())
-            # else:
-            #     time.sleep(5)
+            new_command = tools_queue[self.tool_number].get()
+            self.basic_move(new_command)
     def basic_move(self, new_command):
         if new_command == self.Command.LOAD:
             if self.current_state != tool.state.FILAMENT_LOADED:
@@ -333,8 +325,7 @@ class tool:
                 return MessageType.Success, "Filament retracted"
             else:
                 log.send_info_log("Error while retracting filament on tool: {}".format(self.tool_number))
-                if self.current_state != tool.state.FILAMENT_PRESENT:
-                    self.current_state = tool.state.FILAMENT_PRIMED
+                self.current_state = tool.state.FILAMENT_PRIMED
                 return MessageType.Error, "Error while retracting filament"
         elif new_command == self.Command.UNLOAD:
             self.prepare_movement()
@@ -377,7 +368,7 @@ class tool:
         else:
             log.send_info_log("Error, wrong command received")
 
-time.sleep(2)
+time.sleep(10)
 # Declare four tools with desired parameters, and use them globally
 tools = [tool(0, 2, 11.1, "A", 0, 3, 19, 16),
          tool(1, 3, 10.1, "V", 1, 2, 14, 21),
